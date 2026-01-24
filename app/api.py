@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,11 +28,20 @@ class AnalyzeRequest(BaseModel):
 
 class AnalyzeResponse(BaseModel):
     label: str
-    confidence: float
     decision: str
+    confidence: float
+    margin: float
+    risk_score: int
+    risk_signals: List[str]
     explanation: str
     model_name: str
     scores: Dict[str, float]
+
+
+class HealthResponse(BaseModel):
+    status: str
+    model_name: str
+    ready: bool
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -65,9 +74,19 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 
     return AnalyzeResponse(
         label=result.label,
-        confidence=result.confidence,
         decision=decision.decision,
+        confidence=result.confidence,
+        margin=decision.margin,
+        risk_score=decision.risk_score,
+        risk_signals=decision.risk_signals,
         explanation=explanation,
         model_name=model.model_name,
         scores=result.scores,
     )
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    """Lightweight health check for monitoring and local diagnostics."""
+    model = get_model()
+    return HealthResponse(status="ok", model_name=model.model_name, ready=True)

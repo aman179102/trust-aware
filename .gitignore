@@ -1,0 +1,3 @@
+# .gitignore file content
+__pycache__/
+*.pyc

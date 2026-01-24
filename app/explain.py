@@ -81,7 +81,21 @@ def generate_explanation(
             "hedging or contrastive phrasing."
         )
 
-    # 5. Summarise how the risk score drove the final decision.
+    # 5. Explicitly list which risk signals were triggered.
+    if decision.risk_signals:
+        signal_list = ", ".join(decision.risk_signals)
+        parts.append(
+            f"Triggered risk signals: {signal_list}. These signals indicate "
+            "that the model's raw confidence should not be trusted on its own."
+        )
+    else:
+        parts.append(
+            "No explicit risk signals were triggered for this input, so the "
+            "model's confidence and score margin are considered reliable in "
+            "this context."
+        )
+
+    # 6. Summarise how the risk score drove the final decision.
     if decision.decision == "needs_human_review":
         parts.append(
             f"Multiple risk signals combine into a risk score of {risk_score}, "

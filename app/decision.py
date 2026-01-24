@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from .model import TextClassificationResult
 
@@ -29,6 +29,7 @@ class DecisionDetails:
     low_margin: bool
     ambiguous_language: bool
     mixed_sentiment: bool
+    risk_signals: List[str]
 
 
 def _compute_margin(scores: Dict[str, float]) -> float:
@@ -93,7 +94,12 @@ def _detect_ambiguity_signals(text: str) -> Tuple[bool, bool]:
     has_question = "?" in lower
 
     ambiguous_language = has_hedging or has_contrast or has_question
-    mixed_sentiment = has_contrast
+
+    # We treat explicit contrast or question-based uncertainty as a proxy for
+    # "mixed" or conflicting signals in the text. This allows even
+    # high-confidence predictions with strong ambiguity cues to be routed to
+    # human review.
+    mixed_sentiment = has_contrast or has_question
 
     return ambiguous_language, mixed_sentiment
 
@@ -124,15 +130,19 @@ def make_decision(
     # Textual ambiguity and mixed sentiment signals.
     ambiguous_language, mixed_sentiment = _detect_ambiguity_signals(text)
 
-    risk_score = 0
+    # Build the set of active risk signals explicitly so that the
+    # risk_score is always equal to the number of signals that fired.
+    risk_signals: List[str] = []
     if low_confidence:
-        risk_score += 1
+        risk_signals.append("low_confidence")
     if low_margin:
-        risk_score += 1
+        risk_signals.append("low_margin")
     if ambiguous_language:
-        risk_score += 1
+        risk_signals.append("ambiguity")
     if mixed_sentiment:
-        risk_score += 1
+        risk_signals.append("mixed_sentiment")
+
+    risk_score = len(risk_signals)
 
     if risk_score >= RISK_REVIEW_THRESHOLD:
         decision = "needs_human_review"
@@ -149,4 +159,5 @@ def make_decision(
         low_margin=low_margin,
         ambiguous_language=ambiguous_language,
         mixed_sentiment=mixed_sentiment,
+        risk_signals=risk_signals,
     )

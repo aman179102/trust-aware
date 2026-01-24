@@ -1,5 +1,14 @@
 # Trust-Aware AI Decision System
 
+> **TL;DR**  
+> A local FastAPI service that wraps a Hugging Face sentiment model with a
+> risk-aware decision layer. Instead of just returning a label, it exposes
+> confidence, margin, and linguistic risk signals and decides whether to
+> auto-accept a prediction or defer to a human reviewer. Designed to optimise
+> for trust and safety, not raw accuracy, using only free, CPU-friendly tools.
+
+## Project Overview
+
 A small but industry-relevant reference project that shows how to build an AI
 system that is **aware of its own uncertainty**, can **explain its decisions**,
 and knows when to **ask a human for help**.
@@ -15,7 +24,7 @@ Everything runs **locally on CPU**. No paid APIs, no cloud credits.
 
 ---
 
-## Why Trust-Aware AI?
+## Why Confidence-Only AI Is Dangerous
 
 Most real-world AI failures are not about getting a single prediction wrong,
 they are about systems that are **confidently wrong** without any visibility or
@@ -40,7 +49,7 @@ This project is a minimal, end-to-end example of that pattern.
 
 ---
 
-## What This Project Does
+## What Makes This System Different
 
 For a given piece of text, the system:
 
@@ -56,20 +65,26 @@ For a given piece of text, the system:
    - else → `decision = "accepted"`
 5. Generates a **human-readable explanation** that describes:
    - the predicted label and confidence
-   - which trust signals were triggered (confidence, margin, ambiguity)
+   - which trust signals were triggered (confidence, margin, ambiguity, mixed sentiment)
    - why automation was allowed or blocked
    - that the system intentionally prefers **safety over blind automation**
 
-Everything is exposed through a simple FastAPI endpoint:
+Everything is exposed through simple FastAPI endpoints:
 
-- `POST /analyze`
+- `POST /analyze` – run a trust-aware analysis on text
+- `GET /health` – lightweight health check (model loaded, process ready)
+
+Example `/analyze` response:
 
 ```jsonc
 {
   "label": "POSITIVE",
-  "confidence": 0.93,
   "decision": "accepted",
-  "explanation": "...human-readable text...",
+  "confidence": 0.93,
+  "margin": 0.90,
+  "risk_score": 0,
+  "risk_signals": [],
+  "explanation": "...human-readable text explaining why automation was safe...",
   "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
   "scores": {
     "NEGATIVE": 0.07,
@@ -80,7 +95,7 @@ Everything is exposed through a simple FastAPI endpoint:
 
 ---
 
-## Architecture Overview
+## Architecture (Model → Risk Engine → Decision)
 
 High-level data flow:
 
@@ -102,6 +117,69 @@ User Text
    ▼
 Client / UI
 ```
+
+## Example Scenarios (clear vs ambiguous inputs)
+
+### Clear, low-risk sentiment
+
+Request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I absolutely love this product, it works perfectly."}'
+```
+
+Possible response:
+
+```jsonc
+{
+  "label": "POSITIVE",
+  "decision": "accepted",
+  "confidence": 0.97,
+  "margin": 0.90,
+  "risk_score": 0,
+  "risk_signals": [],
+  "explanation": "...no risk signals fired; confidence and margin are both strong...",
+  "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
+  "scores": {
+    "NEGATIVE": 0.03,
+    "POSITIVE": 0.97
+  }
+}
+```
+
+### Ambiguous, high-risk sentiment
+
+Request:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "The product is great, but the customer service was terrible."}'
+```
+
+Possible response:
+
+```jsonc
+{
+  "label": "POSITIVE",
+  "decision": "needs_human_review",
+  "confidence": 0.86,
+  "margin": 0.18,
+  "risk_score": 2,
+  "risk_signals": ["low_margin", "ambiguity"],
+  "explanation": "Although confidence is high, the margin is narrow and the text uses contrastive phrasing, so the system defers to human review.",
+  "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
+  "scores": {
+    "NEGATIVE": 0.14,
+    "POSITIVE": 0.86
+  }
+}
+```
+
+These examples highlight how **the same base model** can behave very
+differently once wrapped in a risk-aware decision layer.
 
 ### Module Layout
 
@@ -142,7 +220,7 @@ it easier to extend or replace individual components later.
 
 ---
 
-## Getting Started
+## How to Run Locally
 
 ### 1. Prerequisites
 
@@ -182,67 +260,30 @@ The API will be available at:
 
 ---
 
-## Usage Examples
+## Intended Use & Non-Goals
 
-### Basic sentiment analysis with trust-aware decision
+- **Intended use**
+  - As a reference implementation for **trust-aware AI** and
+    human-in-the-loop decision making.
+  - As a local service for teams who want to experiment with
+    **risk-sensitive sentiment analysis** without sending data to the cloud.
+  - As a portfolio / demo project for discussing **AI safety and governance**
+    in interviews or design reviews.
 
-```bash
-curl -X POST "http://127.0.0.1:8000/analyze" \
-  -H "Content-Type: application/json" \
-  -d '{"text": "I love this product, it works great!"}'
-```
-
-Possible response:
-
-```jsonc
-{
-  "label": "POSITIVE",
-  "confidence": 0.95,
-  "decision": "accepted",
-  "explanation": "The system predicted POSITIVE with confidence 0.95. ...",
-  "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
-  "scores": {
-    "NEGATIVE": 0.05,
-    "POSITIVE": 0.95
-  }
-}
-```
-
-### Using a custom confidence threshold
-
-You can make the system more conservative by increasing the threshold:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/analyze" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "The service was okay, not great but not terrible either.",
-    "confidence_threshold": 0.8
-  }'
-```
-
-For borderline cases, this often results in:
-
-```jsonc
-{
-  "label": "POSITIVE",
-  "confidence": 0.72,
-  "decision": "needs_human_review",
-  "explanation": "...",
-  "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
-  "scores": {
-    "NEGATIVE": 0.28,
-    "POSITIVE": 0.72
-  }
-}
-```
+- **Non-goals**
+  - This is **not** a truth engine or a replacement for human judgment.
+  - This is **not** a high-accuracy, domain-tuned sentiment model; it is a
+    small, generic model wrapped in a strong policy layer.
+  - This repository does **not** include automated retraining, calibration, or
+    production observability; those are intentionally called out as future
+    work.
 
 ---
 
-## How This Reflects Industry Practice
+## Human-in-the-Loop Philosophy
 
 This project is intentionally small, but it demonstrates several patterns that
-show up in real systems:
+show up in real **human-in-the-loop** systems:
 
 - **Model vs. policy separation**
   - The Hugging Face model only knows how to score text.
@@ -250,8 +291,9 @@ show up in real systems:
     enforces business rules (thresholds, human review).
 
 - **Explicit uncertainty handling**
-  - Instead of just returning a label, the API always returns a
-    **confidence score** and the full **per-class probability vector**.
+  - Instead of just returning a label, the API always returns structured
+    signals: the label, confidence, margin, risk score, and which risk
+    signals fired.
   - Low-confidence or high-risk predictions are never silently treated as
     high-confidence truths.
 
@@ -260,60 +302,26 @@ show up in real systems:
   - In many production environments, this type of explanation is preferred
     because it is predictable, auditable, and cheap to compute.
 
----
-
-## Why this system is different
-
-Most examples of text classification APIs simply return a label and a single
-confidence value. In practice, that is not enough to operate safely:
-
-- confidence can be **miscalibrated**
-- models can be **overconfident on unfamiliar inputs**
-- ambiguous or mixed statements can look confident but still be risky
-
-This project takes a more **systems-oriented** approach:
-
-- **Hybrid trust signals instead of a single knob**  
-  Decisions are based on a combination of confidence, score margin, and
-  linguistic ambiguity indicators. No single signal can force automation.
-
-- **Risk-first, not accuracy-only**  
-  A compact **risk score** tracks how many weak risk factors are present.
-  Even with high confidence, a narrow margin or ambiguous language can push
-  the score over the review threshold and route the case to humans.
-
-- **Pattern-based ambiguity, not brittle word lists**  
-  The system looks for structural cues such as hedging ("maybe", "it seems"),
-  questions, and contrastive phrasing ("but", "however") instead of relying on
-  a static blacklist of terms. These are treated as soft indicators that
-  contribute to risk rather than hard vetoes.
-
-- **Safe behaviour under uncertainty**  
-  When signals disagree – for example, high confidence but low margin and
-  ambiguous language – the system **defers to human review**. This mirrors how
-  production systems are commonly designed for regulated or safety-critical
-  domains.
-
-In short, the goal is not just to run an ML model, but to demonstrate how
-**real AI systems manage uncertainty and trust** when user input is
-unpredictable.
-
-- **Local-first, privacy-friendly design**
-  - All processing happens on your machine with an open-source model.
-  - No data leaves your environment, which is critical for sensitive text.
-
-This makes the repository suitable as:
-
-- a **final-year project**
-- a **portfolio piece** on GitHub
-- a starting point for more advanced trust and safety work
+- **Humans stay in control**
+  - The system is designed so that humans, not the model, make the final call
+    in ambiguous or high-risk situations.
+  - The `/analyze` output is structured so that downstream tools or reviewers
+    can build dashboards, queues, or escalation workflows on top.
 
 ---
 
-## Extending the Project
+## Future Improvements (sarcasm, domain rules, active learning)
 
 Ideas for future work:
 
+- **Sarcasm and nuanced tone**: extend the ambiguity detector to better handle
+  sarcasm, irony, and subtle tone shifts that can confuse sentiment models.
+- **Domain-specific rules**: layer in domain rules (e.g. finance, healthcare,
+  trust & safety) that can override the model when certain topics or entities
+  are present.
+- **Active learning and feedback**: add mechanisms for reviewers to provide
+  feedback on high-risk cases and use that feedback to retrain or recalibrate
+  models offline.
 - **Model choice**: swap in a different Hugging Face text classifier (e.g.
   topic classification, toxicity detection) by changing the model name in
   `app/model.py`.
@@ -327,6 +335,53 @@ Ideas for future work:
 - **More advanced explainability**: integrate additional open-source
   techniques (e.g. saliency maps or attention visualisation) while still
   staying local and free.
+
+---
+
+## How to Evaluate This System
+
+When reviewing this project, it is important to treat it as a
+**trust-first / safety-first** system rather than an accuracy benchmark.
+
+- **Not accuracy-first**
+  - The underlying DistilBERT model is "good enough" for sentiment, but the
+    focus of this repository is on the **policy and risk layer** wrapped
+    around it.
+
+- **Trust-first decision logic**
+  - The system explicitly tracks multiple weak signals (confidence, margin,
+    ambiguity, mixed signals) and aggregates them into a **risk_score**.
+  - Automation is only allowed when the cumulative risk is low; otherwise the
+    system defers to human review.
+
+- **Reading `risk_score` and `risk_signals`**
+  - `risk_signals` lists *which* factors fired, e.g.
+    `['low_margin', 'ambiguity']`.
+  - `risk_score` is the **count** of those signals, and it is directly used to
+    choose between `"accepted"` and `"needs_human_review"`.
+  - Reviewers can quickly see *why* a prediction was considered risky by
+    inspecting these fields and the explanation text.
+
+- **Why high confidence can still trigger review**
+  - Confidence alone can be miscalibrated or misleading, especially for
+    unfamiliar or ambiguous inputs.
+  - If, for example, the text includes strong contrast ("but", "however") or
+    explicit questions, the system may still route the case to human review
+    even when confidence is high and the margin is reasonable.
+
+- **Why deferring to humans is safer**
+  - In many production environments, the cost of an overconfident automated
+    decision is much higher than the cost of asking a human to review a
+    borderline case.
+  - This project intentionally **optimises for safe behaviour under
+    uncertainty**, making it more suitable as a building block for
+    safety-critical or regulated domains than a typical "black box" sentiment
+    API.
+
+Taken together, these properties make the system **provable and reviewable**:
+an engineer, auditor, or hiring manager can understand in a few minutes how
+decisions are made, which signals drive those decisions, and where the safe
+fallbacks are.
 
 ---
 
