@@ -1,27 +1,59 @@
 # Trust-Aware AI Decision System
 
+Overconfident AI can sound sure, pass tests, and still make quietly wrong decisions.  
+Most sentiment APIs return a label and a confidence score, then leave you to guess when it’s unsafe to automate.  
+This project shows how to turn that same model into a **trust-aware, human-in-the-loop AI system** that knows when to ask for help.
+
 > **TL;DR**  
-> A local FastAPI service that wraps a Hugging Face sentiment model with a
-> risk-aware decision layer. Instead of just returning a label, it exposes
-> confidence, margin, and linguistic risk signals and decides whether to
-> auto-accept a prediction or defer to a human reviewer. Designed to optimise
-> for trust and safety, not raw accuracy, using only free, CPU-friendly tools.
+> A local FastAPI service that wraps a Hugging Face sentiment model with a risk-aware decision layer.  
+> Instead of just returning a label, it exposes confidence, margin, and linguistic risk signals and decides whether to auto-accept a prediction or defer to a human reviewer.  
+> Built entirely from free, CPU-friendly tools for privacy-friendly, on-prem style workflows.
 
 ## Project Overview
 
-A small but industry-relevant reference project that shows how to build an AI
-system that is **aware of its own uncertainty**, can **explain its decisions**,
-and knows when to **ask a human for help**.
+This repository implements an end-to-end, trust-aware sentiment analysis system:
 
-Built using only **free and open-source tools**:
+- Uses a pretrained DistilBERT model from Hugging Face (no training required).
+- Runs fully locally on CPU (no paid APIs, no cloud dependencies).
+- Wraps the model in a **risk engine** that inspects confidence, score margins, and linguistic ambiguity.
+- Makes a **human-in-the-loop decision**: either `accepted` or `needs_human_review`.
+- Returns both **machine-readable signals** and a **human-readable explanation** for every request.
 
-- **Python**
-- **FastAPI** for the HTTP API
-- **Hugging Face Transformers** for the pretrained text classifier
-- **PyTorch** for tensor operations
+---
 
-Everything runs **locally on CPU**. No paid APIs, no cloud credits.
+## Typical ML APIs vs This Project
 
+| Aspect              | Typical ML API                                   | This project                                                                 |
+| ------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Output              | Label + raw confidence                           | Label, confidence, margin, `risk_score`, `risk_signals`, explanation, scores |
+| Decision logic      | Threshold on confidence                          | Multi-signal risk engine with explicit human-review threshold                |
+| Automation          | Optimised for full automation                    | Optimised for safe automation + human in the loop                            |
+| Transparency        | Opaque; little insight into uncertainty          | Structured risk metadata + narrative explanation                             |
+| Deployment model    | Often cloud/SaaS                                 | Fully local, CPU-only                                                        |
+| Governance posture  | Trust and review added later                     | Trust, review, and deferral designed in from day one                         |
+
+---
+
+## Real Example: High Confidence, Unsafe Automation
+
+Even when the model is confident, this system may *still* decide to defer:
+
+```jsonc
+{
+  "label": "POSITIVE",
+  "decision": "needs_human_review",
+  "confidence": 0.91,
+  "margin": 0.06,
+  "risk_score": 2,
+  "risk_signals": ["low_margin", "ambiguity"],
+  "explanation": "Although model confidence is high, the score margin is narrow and the text contains contrastive phrasing, so the system defers to human review instead of auto-approving.",
+  "model_name": "distilbert-base-uncased-finetuned-sst-2-english",
+  "scores": {
+    "NEGATIVE": 0.09,
+    "POSITIVE": 0.91
+  }
+}
+```
 ---
 
 ## Why Confidence-Only AI Is Dangerous
