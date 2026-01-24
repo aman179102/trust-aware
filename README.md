@@ -263,8 +263,8 @@ it easier to extend or replace individual components later.
 ### 2. Clone and install
 
 ```bash
-git clone <your-fork-or-repo-url>
-cd trust_aware_ai
+https://github.com/aman179102/trust-aware.git
+cd trust-aware
 
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\\Scripts\\activate
