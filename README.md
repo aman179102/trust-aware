@@ -15,7 +15,7 @@ This project was featured in **AI Pick (Japan)** as one of the
 *Top 5 trending GitHub projects in AI*.
 
 Source:
-[https://ai-pick.jp/ai-and-technology/ai-latest-trend-5-papers-5-github-2026-01-29/](https://ai-pick.jp/37081/#index_id12)
+[https://ai-pick.jp/ai-and-technology/ai-latest-trend-5-papers-5-github-2026-01-29/](https://ai-pick.jp/37081/)
 
 
 ## Project Overview
