@@ -9,6 +9,15 @@ This project shows how to turn that same model into a **trust-aware, human-in-th
 > Instead of just returning a label, it exposes confidence, margin, and linguistic risk signals and decides whether to auto-accept a prediction or defer to a human reviewer.  
 > Built entirely from free, CPU-friendly tools for privacy-friendly, on-prem style workflows.
 
+## 🌍 Featured & Recognized
+
+This project was featured in **AI Pick (Japan)** as one of the
+*Top 5 trending GitHub projects in AI*.
+
+Source:
+[https://ai-pick.jp/ai-and-technology/ai-latest-trend-5-papers-5-github-2026-01-29/](https://ai-pick.jp/37081/#index_id12)
+
+
 ## Project Overview
 
 This repository implements an end-to-end, trust-aware sentiment analysis system:
