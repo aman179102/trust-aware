@@ -303,6 +303,12 @@ The API will be available at:
 - Raw JSON: `POST http://127.0.0.1:8000/analyze`
 
 ---
+(*) Demo Screenshot Given Below :-
+
+
+![showcase](https://github.com/user-attachments/assets/088d8e86-a2b9-4466-b611-a96aa7dd6742)
+
+---
 
 ## Intended Use & Non-Goals
 
